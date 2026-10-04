@@ -1,0 +1,63 @@
+syntax = "proto3";
+
+package racing;
+
+service RacingService {
+  rpc JoinGame(JoinGameRequest) returns (JoinGameResponse);
+  rpc GetGameState(GetGameStateRequest) returns (GameState);
+  rpc RollDice(RollDiceRequest) returns (RollDiceResponse);
+  rpc LeaveGame(LeaveGameRequest) returns (LeaveGameResponse);
+}
+
+enum GameStatus {
+  GAME_STATUS_UNSPECIFIED = 0;
+  WAITING = 1;
+  RUNNING = 2;
+  FINISHED = 3;
+}
+
+message Player {
+  int32 id = 1;
+  string name = 2;
+  int32 position = 3;
+}
+
+message GameState {
+  GameStatus status = 1;
+  repeated Player players = 2;
+  int32 current_turn = 3;
+  int32 winner = 4;
+  int32 turn_number = 5;
+  int32 last_dice = 6;
+  int32 track_length = 7;
+}
+
+message JoinGameRequest {
+  string name = 1;
+}
+
+message JoinGameResponse {
+  int32 player_id = 1;
+  string token = 2;
+  GameState state = 3;
+}
+
+message GetGameStateRequest {
+  string token = 1;
+}
+
+message RollDiceRequest {
+  string token = 1;
+}
+
+message RollDiceResponse {
+  int32 dice = 1;
+  GameState state = 2;
+}
+
+message LeaveGameRequest {
+  string token = 1;
+}
+
+message LeaveGameResponse {
+}
