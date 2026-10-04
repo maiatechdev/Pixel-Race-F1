@@ -537,7 +537,9 @@ O fundo da corrida é montado em camadas de parallax (`BACKGROUND_LAYERS` e `TRA
 
 As posições das rodas em cada carro e o deslocamento do sprite `accelerate` ficam em `CAR_SPRITES` no `client/config.py`. Se os carros forem regerados em outro tamanho, essas posições precisam ser medidas de novo.
 
-Pastas previstas, ainda **sem arquivos**: `effects/` (smoke, sparks, exhaust), `ui/` (dice, icons, flags, hud), `fonts/`, `audio/`.
+`assets/fonts/` tem a fonte Press Start 2P (licença SIL OFL, arquivo `OFL.txt` ao lado), usada em toda a interface via `pixel_font()` em `client/assets.py`. Use tamanhos múltiplos de 8 para manter os pixels nítidos.
+
+Pastas previstas, ainda **sem arquivos**: `effects/` (smoke, sparks, exhaust), `ui/` (dice, icons, flags, hud), `audio/`.
 
 Antes de escrever código dependente de assets, **inspecione o diretório existente e use os nomes reais**.
 

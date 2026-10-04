@@ -56,11 +56,13 @@ class Car:
         self.wheel_angle = (self.wheel_angle
                             + self.wheel_spin * config.WHEEL_MAX_DEGREES_PER_SECOND * dt) % 360
 
+    def body_rect(self) -> pygame.Rect:
+        return self.idle.get_rect(right=round(screen_x_for(self.visual_position)), bottom=self.lane_y)
+
     def draw(self, surface: pygame.Surface) -> None:
         moving = self.is_moving
         shake = round(math.sin(self.anim_time * 60)) if moving else 0
-        body = self.idle.get_rect(right=round(screen_x_for(self.visual_position)),
-                                  bottom=self.lane_y + shake)
+        body = self.body_rect().move(0, shake)
         if moving:
             surface.blit(self.accelerating, body.move(self.accelerate_offset_x, 0))
         else:

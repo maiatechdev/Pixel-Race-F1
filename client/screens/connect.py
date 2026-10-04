@@ -3,16 +3,24 @@ import queue
 import pygame
 
 import config
-from assets import load_image, scale_to_height
-from components.hud import draw_text
+from assets import load_image, pixel_font, scale_to_height
+from components.hud import draw_alert, draw_text
 from network import RacingClient
 from screens.race import RaceScreen
 
-FIELD_WIDTH = 320
-FIELD_HEIGHT = 32
-FIELD_GAP = 58
+FIELD_WIDTH = 432
+FIELD_HEIGHT = 36
+FIELD_GAP = 64
 FIELDS_TOP = 200
+FIELD_PADDING = 12
 MAX_FIELD_LENGTH = 24
+PANEL_WIDTH = 560
+PANEL_TOP = 160
+PANEL_HEIGHT = 330
+TITLE_Y = 92
+TITLE_SIZE = 40
+TITLE_OUTLINE = (20, 20, 40)
+CONNECTION_HINT = "Confira se o servidor está rodando e o endereço e a porta."
 
 
 class TextField:
@@ -33,10 +41,11 @@ class ConnectScreen:
         self.focus = 0 if not name else len(self.fields) - 1
         self.error = error
         self.client: RacingClient | None = None
+        self.clock = 0.0
         self.background = scale_to_height(load_image("background/sky.png"), config.BASE_HEIGHT)
-        self.font_title = pygame.font.Font(None, 72)
-        self.font = pygame.font.Font(None, 28)
-        self.font_small = pygame.font.Font(None, 22)
+        self.font_title = pixel_font(TITLE_SIZE)
+        self.font = pixel_font(config.FONT_TEXT)
+        self.font_small = pixel_font(config.FONT_SMALL)
         pygame.key.start_text_input()
 
     @property
@@ -80,6 +89,7 @@ class ConnectScreen:
         self.client.start()
 
     def update(self, dt: float):
+        self.clock += dt
         if not self.connecting:
             return None
         try:
@@ -102,29 +112,38 @@ class ConnectScreen:
     def draw(self, surface: pygame.Surface) -> None:
         surface.blit(self.background, (0, 0))
         center_x = config.BASE_WIDTH // 2
-        draw_text(surface, self.font_title, "DISTRIBUTED RACING", (20, 20, 40), center=(center_x + 3, 113))
-        draw_text(surface, self.font_title, "DISTRIBUTED RACING", config.COLOR_TEXT, center=(center_x, 110))
+        self._draw_title(surface, center_x)
 
-        panel = pygame.Surface((FIELD_WIDTH + 260, 290), pygame.SRCALPHA)
-        panel.fill((10, 10, 25, 200))
-        surface.blit(panel, panel.get_rect(midtop=(center_x, FIELDS_TOP - 40)))
+        panel = pygame.Surface((PANEL_WIDTH, PANEL_HEIGHT), pygame.SRCALPHA)
+        panel.fill((10, 10, 25, 225))
+        surface.blit(panel, panel.get_rect(midtop=(center_x, PANEL_TOP)))
 
         for index, field in enumerate(self.fields):
             active = index == self.focus and not self.connecting
             draw_text(surface, self.font_small, field.label, config.COLOR_TEXT,
-                      bottomleft=(field.rect.left, field.rect.top - 4))
+                      bottomleft=(field.rect.left, field.rect.top - 6))
             pygame.draw.rect(surface, config.COLOR_HUD_BG, field.rect)
-            border = config.COLOR_YELLOW if active else config.COLOR_HUD_BORDER
+            border = config.COLOR_YELLOW if active else config.COLOR_BUTTON_IDLE
             pygame.draw.rect(surface, border, field.rect, 2)
-            cursor = "_" if active else ""
+            cursor = "_" if active and int(self.clock * 2) % 2 == 0 else ""
             draw_text(surface, self.font, field.value + cursor, config.COLOR_TEXT,
-                      midleft=(field.rect.left + 10, field.rect.centery))
+                      midleft=(field.rect.left + FIELD_PADDING, field.rect.centery))
 
+        hint_y = self.fields[-1].rect.bottom + 28
         if self.connecting:
-            hint = f"CONECTANDO A {self.client.address}..."
-            draw_text(surface, self.font, hint, config.COLOR_YELLOW, center=(center_x, 400))
+            dots = "." * (int(self.clock * 3) % 4)
+            draw_text(surface, self.font, f"CONECTANDO A {self.client.address}{dots}", config.COLOR_YELLOW,
+                      midleft=(center_x - self.font.size(f"CONECTANDO A {self.client.address}...")[0] // 2, hint_y))
         else:
-            hint = "[ENTER] CONECTAR    [TAB] PRÓXIMO CAMPO    [ESC] SAIR"
-            draw_text(surface, self.font_small, hint, config.COLOR_TEXT, center=(center_x, 400))
+            draw_text(surface, self.font_small, "ENTER: CONECTAR   TAB: PRÓXIMO CAMPO   ESC: SAIR",
+                      config.COLOR_TEXT, center=(center_x, hint_y))
         if self.error:
-            draw_text(surface, self.font, self.error, config.COLOR_RED, center=(center_x, 435))
+            hint = CONNECTION_HINT if "conectar" in self.error else ""
+            draw_alert(surface, self.error, hint, max_width=PANEL_WIDTH - 40,
+                       midbottom=(center_x, PANEL_TOP + PANEL_HEIGHT - 14))
+
+    def _draw_title(self, surface: pygame.Surface, center_x: int) -> None:
+        title = "DISTRIBUTED RACING"
+        for dx, dy in ((-2, 0), (2, 0), (0, -2), (0, 2), (4, 4)):
+            draw_text(surface, self.font_title, title, TITLE_OUTLINE, center=(center_x + dx, TITLE_Y + dy))
+        draw_text(surface, self.font_title, title, config.COLOR_TEXT, center=(center_x, TITLE_Y))

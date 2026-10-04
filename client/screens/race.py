@@ -1,13 +1,14 @@
+import math
 import queue
 
 import pygame
 
 import config
-from assets import load_image, scale_to_height
+from assets import load_image, pixel_font, scale_to_height, truncate
 from components.car import Car, load_wheel_frames, screen_x_for
 from components.dice import Dice
 from components.finish_celebration import FinishCelebration
-from components.hud import Hud, draw_text
+from components.hud import BUTTON_HIDDEN, BUTTON_READY, BUTTON_WAITING, Hud, draw_alert, draw_text
 from components.parallax import ParallaxLayer, PropLayer
 from components.start_lights import StartLights
 from game_state import PLAYER_1, PLAYER_2, GameState
@@ -17,6 +18,11 @@ PLAYER_COLORS = {PLAYER_1: config.COLOR_RED, PLAYER_2: config.COLOR_BLUE}
 CURB_HEIGHT = 8
 CURB_SEGMENT = 24
 CHECKER = 8
+MARKER_HALF_WIDTH = 6
+MARKER_HEIGHT = 6
+MARKER_GAP = 6
+OUTLINE = (20, 20, 32)
+ALERT_TOP = 16
 
 IDLE = "IDLE"
 ROLLING = "ROLLING"
@@ -35,6 +41,8 @@ class RaceScreen:
         self.moving_player = 0
         self.roll_pending = False
         self.message = ""
+        self.message_timer = 0.0
+        self.clock = 0.0
         self.connection_error = ""
         self.session_lost = ""
 
@@ -59,10 +67,11 @@ class RaceScreen:
         }
         self.hud = Hud(helmets)
         self.dice = Dice(state.last_dice or None)
-        self.font_title = pygame.font.Font(None, 64)
-        self.font_go = pygame.font.Font(None, 140)
+        self.font_title = pixel_font(config.FONT_TITLE)
+        self.font_go = pixel_font(config.FONT_HERO)
+        self.font = pixel_font(config.FONT_TEXT)
+        self.font_small = pixel_font(config.FONT_SMALL)
         self.celebration = FinishCelebration()
-        self.font = pygame.font.Font(None, 28)
 
     @staticmethod
     def _build_backdrop() -> list:
@@ -113,6 +122,11 @@ class RaceScreen:
         self.client.request_roll()
 
     def update(self, dt: float):
+        self.clock += dt
+        if self.message:
+            self.message_timer -= dt
+            if self.message_timer <= 0:
+                self.message = ""
         self._handle_network_events()
         self.dice.update(dt)
         self.start_lights.update(dt)
@@ -158,6 +172,7 @@ class RaceScreen:
             elif kind == "roll_rejected":
                 self._cancel_roll()
                 self.message = event[1]
+                self.message_timer = config.MESSAGE_SECONDS
             elif kind == "connection_error":
                 self._cancel_roll()
                 self.connection_error = event[1]
@@ -206,6 +221,7 @@ class RaceScreen:
         self._draw_start_gantry(surface)
         self.cars[PLAYER_1].draw(surface)
         self.cars[PLAYER_2].draw(surface)
+        self._draw_you_marker(surface)
         self.celebration.draw(surface)
         self._draw_hud(surface)
         self._draw_overlay(surface)
@@ -239,46 +255,65 @@ class RaceScreen:
                                                     bottom=config.TRACK_TOP + config.GANTRY_OVERHANG)
         self.start_lights.draw(surface, rect.topleft)
 
+    def _draw_you_marker(self, surface: pygame.Surface) -> None:
+        body = self.cars[self.my_id].body_rect()
+        bob = round(math.sin(self.clock * 4))
+        tip = (body.centerx, body.top - MARKER_GAP + bob)
+        triangle = [tip, (tip[0] - MARKER_HALF_WIDTH, tip[1] - MARKER_HEIGHT),
+                    (tip[0] + MARKER_HALF_WIDTH, tip[1] - MARKER_HEIGHT)]
+        pygame.draw.polygon(surface, OUTLINE, [(x, y + 1) for x, y in triangle])
+        pygame.draw.polygon(surface, config.COLOR_YELLOW, triangle)
+        label_x, label_y = tip[0], tip[1] - MARKER_HEIGHT - 3
+        draw_text(surface, self.font_small, "VOCÊ", OUTLINE, midbottom=(label_x + 1, label_y + 1))
+        draw_text(surface, self.font_small, "VOCÊ", config.COLOR_YELLOW, midbottom=(label_x, label_y))
+
     def _draw_hud(self, surface: pygame.Surface) -> None:
         players = []
         for pid in (PLAYER_1, PLAYER_2):
-            name = self.names.get(pid, "AGUARDANDO...")
-            if pid == self.my_id:
-                name += " (VOCÊ)"
             players.append({
                 "id": pid,
-                "name": name,
+                "name": self.names.get(pid, "AGUARDANDO"),
                 "position": self.shown_positions[pid],
                 "color": PLAYER_COLORS[pid],
+                "is_me": pid == self.my_id,
                 "active": (self.state.status == "RUNNING" and self.state.current_turn == pid
                            and self.phase == IDLE and not self._pending_move()
-                           and not self.start_lights.holding_race),
+                           and not self.start_lights.holding_race
+                           and not self.connection_error and not self.session_lost),
             })
-        self.hud.draw(surface, players, self.dice, self._status_text(), self._can_roll())
+        self.hud.draw(surface, players, self.dice, self._status(), self._button_state(), self.clock)
 
-        warning = self.connection_error or self.message
-        if warning:
-            draw_text(surface, self.hud.font, warning, config.COLOR_RED,
-                      midbottom=(config.BASE_WIDTH // 2, config.HUD_TOP - 6))
+        alert_top = (config.BASE_WIDTH // 2, ALERT_TOP)
+        if self.connection_error and not self.session_lost:
+            draw_alert(surface, self.connection_error,
+                       "Tentando reconectar. Confira se o servidor continua rodando.", midtop=alert_top)
+        elif self.message:
+            draw_alert(surface, self.message, "", midtop=alert_top)
 
-    def _status_text(self) -> str:
+    def _button_state(self) -> str:
+        if self.session_lost or self.state.status == "FINISHED":
+            return BUTTON_HIDDEN
+        return BUTTON_READY if self._can_roll() else BUTTON_WAITING
+
+    def _status(self) -> tuple[str, tuple[int, int, int]]:
         if self.session_lost:
-            return "DESCONECTADO"
+            return "DESCONECTADO", config.COLOR_ALERT
         if self.connection_error:
-            return "RECONECTANDO..."
+            return "RECONECTANDO...", config.COLOR_ALERT
         if self.phase == ROLLING or self.roll_pending:
-            return "ROLANDO..."
+            return "ROLANDO...", config.COLOR_TEXT
         if self.phase == MOVING:
-            return "ACELERANDO!"
+            return "ACELERANDO!", config.COLOR_TEXT
         if self.start_lights.holding_race:
-            return "PREPARAR..."
+            return "PREPARAR...", config.COLOR_TEXT
         if self.state.status == "WAITING":
-            return "AGUARDANDO"
+            return "AGUARDANDO", config.COLOR_TEXT
         if self.state.status == "FINISHED":
-            return "CORRIDA FINALIZADA"
+            return "FIM DE CORRIDA", config.COLOR_TEXT
         if self.state.current_turn == self.my_id:
-            return "SUA VEZ"
-        return "VEZ DO ADVERSÁRIO"
+            return "SUA VEZ!", config.COLOR_YELLOW
+        opponent = truncate(self.names.get(self.state.current_turn, ""), 10)
+        return f"VEZ DE {opponent}", config.COLOR_TEXT
 
     def _draw_overlay(self, surface: pygame.Surface) -> None:
         if self.session_lost:
@@ -291,7 +326,8 @@ class RaceScreen:
                               f"Servidor {self.client.address}")
         elif self._race_settled() and (self.celebration.done or not self._winner_crossed_line()):
             winner = self.state.winner
-            title = "VOCÊ VENCEU!" if winner == self.my_id else f"{self.names.get(winner, '')} VENCEU"
+            winner_name = truncate(self.names.get(winner, ""), config.HUD_NAME_MAX_CHARS)
+            title = "VOCÊ VENCEU!" if winner == self.my_id else f"{winner_name} VENCEU"
             subtitle = ""
             if self._server_position(winner) < self.state.track_length:
                 subtitle = "O adversário saiu da corrida"
@@ -305,4 +341,4 @@ class RaceScreen:
         draw_text(surface, self.font_title, title, color, center=(center_x, 160))
         if subtitle:
             draw_text(surface, self.font, subtitle, config.COLOR_TEXT, center=(center_x, 220))
-        draw_text(surface, self.font, "[ESC] SAIR", config.COLOR_TEXT_DIM, center=(center_x, 270))
+        draw_text(surface, self.font, "ESC: SAIR", config.COLOR_TEXT_DIM, center=(center_x, 270))
