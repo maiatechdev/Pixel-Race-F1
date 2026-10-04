@@ -8,6 +8,7 @@ TRACK_LENGTH = 30
 MAX_PLAYERS = 2
 DICE_SIDES = 6
 PLAYER_TIMEOUT_SECONDS = 5.0
+MAX_NAME_LENGTH = 24
 
 WAITING = "WAITING"
 RUNNING = "RUNNING"
@@ -88,11 +89,17 @@ class Game:
         name = name.strip()
         if not name:
             raise InvalidName("O nome não pode ser vazio")
+        if len(name) > MAX_NAME_LENGTH:
+            raise InvalidName(f"O nome pode ter no máximo {MAX_NAME_LENGTH} caracteres")
+        if not name.isprintable():
+            raise InvalidName("O nome tem caracteres inválidos")
         with self._lock:
             self._drop_inactive_players()
             race = self._race
-            if race.status != WAITING or len(race.players) >= MAX_PLAYERS:
-                raise RoomFull("A partida já está cheia")
+            if race.status == RUNNING:
+                raise RoomFull("Já existe uma corrida em andamento")
+            if race.status == FINISHED:
+                raise RoomFull("A corrida terminou; a sala libera quando os dois jogadores saírem")
             player_id = 1 if 1 not in race.players else 2
             token = secrets.token_hex(16)
             race.players[player_id] = Player(player_id, name, token, last_seen=self._clock())

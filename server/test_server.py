@@ -1,3 +1,4 @@
+import threading
 import unittest
 
 import grpc
@@ -55,6 +56,45 @@ class ServerTest(unittest.TestCase):
                                 racing_pb2.RollDiceRequest(token="token-falso"))
         self.assert_status_code(grpc.StatusCode.RESOURCE_EXHAUSTED, self.client_3.JoinGame,
                                 racing_pb2.JoinGameRequest(name="Ana"))
+
+    def test_name_with_emoji_joins_without_ghost_player(self):
+        joined = self.client_1.JoinGame(racing_pb2.JoinGameRequest(name="Gabi 🏎"))
+        self.assertEqual(joined.player_id, 1)
+        self.assertEqual([p.name for p in joined.state.players], ["Gabi 🏎"])
+
+    def test_join_after_finish_is_resource_exhausted(self):
+        joined_1, _ = self.join_both()
+        self.client_1.LeaveGame(racing_pb2.LeaveGameRequest(token=joined_1.token))
+        self.assert_status_code(grpc.StatusCode.RESOURCE_EXHAUSTED, self.client_3.JoinGame,
+                                racing_pb2.JoinGameRequest(name="Ana"))
+
+    def test_simultaneous_rolls_via_grpc_count_once(self):
+        joined_1, joined_2 = self.join_both()
+        barrier = threading.Barrier(20)
+        codes = []
+        codes_lock = threading.Lock()
+
+        def roll():
+            barrier.wait()
+            try:
+                self.client_1.RollDice(racing_pb2.RollDiceRequest(token=joined_1.token))
+                code = grpc.StatusCode.OK
+            except grpc.RpcError as error:
+                code = error.code()
+            with codes_lock:
+                codes.append(code)
+
+        threads = [threading.Thread(target=roll) for _ in range(20)]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join()
+
+        self.assertEqual(codes.count(grpc.StatusCode.OK), 1)
+        self.assertEqual(codes.count(grpc.StatusCode.FAILED_PRECONDITION), 19)
+        state = self.client_2.GetGameState(racing_pb2.GetGameStateRequest(token=joined_2.token))
+        self.assertEqual(state.current_turn, 2)
+        self.assertEqual(state.turn_number, 2)
 
     def test_empty_name_is_invalid_argument(self):
         self.assert_status_code(grpc.StatusCode.INVALID_ARGUMENT, self.client_1.JoinGame,

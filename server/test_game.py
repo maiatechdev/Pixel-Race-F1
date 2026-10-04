@@ -3,8 +3,8 @@ import threading
 import time
 import unittest
 
-from game import (FINISHED, RUNNING, TRACK_LENGTH, WAITING, Game, InvalidName, NotYourTurn,
-                  RaceNotRunning, RoomFull, UnknownPlayer)
+from game import (FINISHED, MAX_NAME_LENGTH, RUNNING, TRACK_LENGTH, WAITING, Game, InvalidName,
+                  NotYourTurn, RaceNotRunning, RoomFull, UnknownPlayer)
 
 
 class FakeClock:
@@ -53,6 +53,32 @@ class JoinTest(unittest.TestCase):
         with self.assertRaises(InvalidName):
             Game().join("   ")
 
+    def test_name_at_limit_is_accepted(self):
+        _, _, state = Game().join("A" * MAX_NAME_LENGTH)
+        self.assertEqual(state.players[0].name, "A" * MAX_NAME_LENGTH)
+
+    def test_name_over_limit_is_rejected(self):
+        with self.assertRaises(InvalidName):
+            Game().join("A" * (MAX_NAME_LENGTH + 1))
+
+    def test_name_with_control_characters_is_rejected(self):
+        with self.assertRaises(InvalidName):
+            Game().join("Gabi\x07el")
+
+    def test_state_lists_both_player_names(self):
+        game = Game()
+        game.join("Gabriel")
+        _, _, state = game.join("Lucas")
+        self.assertEqual([(p.id, p.name) for p in state.players], [(1, "Gabriel"), (2, "Lucas")])
+
+    def test_join_after_finish_explains_room_is_still_taken(self):
+        game = Game()
+        _, token_1, _ = game.join("Gabriel")
+        game.join("Lucas")
+        game.leave(token_1)
+        with self.assertRaisesRegex(RoomFull, "terminou"):
+            game.join("Ana")
+
     def test_tokens_are_unique(self):
         game = Game()
         _, token_1, _ = game.join("Gabriel")
@@ -73,6 +99,12 @@ class RollDiceTest(unittest.TestCase):
         self.assertEqual(state.last_dice, dice)
         self.assertEqual(state.current_turn, 2)
         self.assertEqual(state.turn_number, 2)
+
+    def test_turn_alternates_back_to_player_1(self):
+        self.game.roll_dice(self.token_1)
+        _, state = self.game.roll_dice(self.token_2)
+        self.assertEqual(state.current_turn, 1)
+        self.assertEqual(state.turn_number, 3)
 
     def test_roll_out_of_turn_is_rejected(self):
         with self.assertRaises(NotYourTurn):
@@ -115,6 +147,21 @@ class LeaveTest(unittest.TestCase):
         state = game.get_state(token_2)
         self.assertEqual(state.status, FINISHED)
         self.assertEqual(state.winner, 2)
+
+    def test_loser_leaving_after_finish_keeps_winner(self):
+        game = Game(rng=random.Random(1))
+        _, token_1, _ = game.join("Gabriel")
+        _, token_2, _ = game.join("Lucas")
+        tokens = {1: token_1, 2: token_2}
+        state = game.get_state(token_1)
+        while state.status == RUNNING:
+            _, state = game.roll_dice(tokens[state.current_turn])
+        winner = state.winner
+        loser = 2 if winner == 1 else 1
+        game.leave(tokens[loser])
+        state = game.get_state(tokens[winner])
+        self.assertEqual(state.status, FINISHED)
+        self.assertEqual(state.winner, winner)
 
     def test_room_resets_when_everyone_leaves(self):
         game = Game()
@@ -189,6 +236,37 @@ class ConcurrencyTest(unittest.TestCase):
         self.assertEqual(position_of(state, 1), dice)
         self.assertEqual(state.current_turn, 2)
         self.assertEqual(state.turn_number, 2)
+
+    def test_simultaneous_roll_and_leave_end_consistently(self):
+        for _ in range(20):
+            game = Game(rng=SlowRandom())
+            _, token_1, _ = game.join("Gabriel")
+            _, token_2, _ = game.join("Lucas")
+            barrier = threading.Barrier(2)
+            outcomes = {}
+
+            def roll():
+                barrier.wait()
+                try:
+                    outcomes["roll"] = game.roll_dice(token_1)
+                except RaceNotRunning:
+                    outcomes["roll"] = None
+
+            def leave():
+                barrier.wait()
+                game.leave(token_2)
+
+            threads = [threading.Thread(target=roll), threading.Thread(target=leave)]
+            for thread in threads:
+                thread.start()
+            for thread in threads:
+                thread.join()
+
+            state = game.get_state(token_1)
+            self.assertEqual(state.status, FINISHED)
+            self.assertEqual(state.winner, 1)
+            expected = outcomes["roll"][0] if outcomes["roll"] else 0
+            self.assertEqual(position_of(state, 1), expected)
 
     def test_simultaneous_joins_never_exceed_two_players(self):
         game = Game()

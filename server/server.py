@@ -27,6 +27,13 @@ ERROR_TO_STATUS_CODE = {
 }
 
 
+def log(message: str) -> None:
+    try:
+        print(message)
+    except UnicodeEncodeError:
+        print(message.encode("ascii", "backslashreplace").decode("ascii"))
+
+
 def to_proto(snapshot: GameSnapshot) -> racing_pb2.GameState:
     return racing_pb2.GameState(
         status=STATUS_TO_PROTO[snapshot.status],
@@ -53,7 +60,7 @@ class RacingServicer(racing_pb2_grpc.RacingServiceServicer):
             player_id, token, snapshot = self.game.join(request.name)
         except GameError as error:
             abort_with(context, error)
-        print(f"[join] {request.name} entrou como Player {player_id}")
+        log(f"[join] {request.name} entrou como Player {player_id}")
         return racing_pb2.JoinGameResponse(player_id=player_id, token=token, state=to_proto(snapshot))
 
     def GetGameState(self, request, context):
@@ -68,7 +75,7 @@ class RacingServicer(racing_pb2_grpc.RacingServiceServicer):
             dice, snapshot = self.game.roll_dice(request.token)
         except GameError as error:
             abort_with(context, error)
-        print(f"[roll] dado {dice} -> turno {snapshot.turn_number}, status {snapshot.status}")
+        log(f"[roll] dado {dice} -> turno {snapshot.turn_number}, status {snapshot.status}")
         return racing_pb2.RollDiceResponse(dice=dice, state=to_proto(snapshot))
 
     def LeaveGame(self, request, context):
@@ -76,7 +83,7 @@ class RacingServicer(racing_pb2_grpc.RacingServiceServicer):
             self.game.leave(request.token)
         except GameError as error:
             abort_with(context, error)
-        print("[leave] um jogador saiu da partida")
+        log("[leave] um jogador saiu da partida")
         return racing_pb2.LeaveGameResponse()
 
 
