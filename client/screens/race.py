@@ -8,6 +8,7 @@ from components.car import Car, load_wheel_frames, screen_x_for
 from components.dice import Dice
 from components.hud import Hud, draw_text
 from components.parallax import ParallaxLayer, PropLayer
+from components.start_lights import StartLights
 from game_state import PLAYER_1, PLAYER_2, GameState
 from network import RacingClient
 
@@ -43,7 +44,9 @@ class RaceScreen:
         }
 
         self.backdrop = self._build_backdrop()
-        self.start_gantry = load_image("circuit/starting_lights.png")
+        self.start_lights = StartLights(load_image("circuit/starting_lights.png"))
+        if state.status == "RUNNING":
+            self.start_lights.start()
         track_height = config.TRACK_BOTTOM - config.TRACK_TOP
         self.asphalt = ParallaxLayer(
             scale_to_height(load_image("track/asphalt.png"), track_height),
@@ -56,6 +59,7 @@ class RaceScreen:
         self.hud = Hud(helmets)
         self.dice = Dice(state.last_dice or None)
         self.font_title = pygame.font.Font(None, 64)
+        self.font_go = pygame.font.Font(None, 140)
         self.font = pygame.font.Font(None, 28)
 
     @staticmethod
@@ -95,7 +99,8 @@ class RaceScreen:
                 and not self.connection_error
                 and not self.session_lost
                 and self.state.status == "RUNNING"
-                and self.state.current_turn == self.my_id)
+                and self.state.current_turn == self.my_id
+                and not self.start_lights.holding_race)
 
     def _request_roll(self) -> None:
         if not self._can_roll():
@@ -108,8 +113,9 @@ class RaceScreen:
     def update(self, dt: float):
         self._handle_network_events()
         self.dice.update(dt)
+        self.start_lights.update(dt)
 
-        if self.phase == IDLE:
+        if self.phase == IDLE and not self.start_lights.holding_race:
             self._start_next_move()
         if self.phase == ROLLING and self.dice.done:
             self.cars[self.moving_player].move_to(self._server_position(self.moving_player))
@@ -154,6 +160,8 @@ class RaceScreen:
 
     def _apply_state(self, state: GameState) -> None:
         self.state = state
+        if state.status == "RUNNING":
+            self.start_lights.start()
         for pid, player in state.players.items():
             self.names[pid] = player.name
 
@@ -212,9 +220,9 @@ class RaceScreen:
 
     def _draw_start_gantry(self, surface: pygame.Surface) -> None:
         start_x = round(screen_x_for(0))
-        surface.blit(self.start_gantry,
-                     self.start_gantry.get_rect(left=start_x - config.GANTRY_POST_OFFSET_X,
-                                                bottom=config.TRACK_TOP + config.GANTRY_OVERHANG))
+        rect = self.start_lights.lit_image.get_rect(left=start_x - config.GANTRY_POST_OFFSET_X,
+                                                    bottom=config.TRACK_TOP + config.GANTRY_OVERHANG)
+        self.start_lights.draw(surface, rect.topleft)
 
     def _draw_hud(self, surface: pygame.Surface) -> None:
         players = []
@@ -228,7 +236,8 @@ class RaceScreen:
                 "position": self.shown_positions[pid],
                 "color": PLAYER_COLORS[pid],
                 "active": (self.state.status == "RUNNING" and self.state.current_turn == pid
-                           and self.phase == IDLE and not self._pending_move()),
+                           and self.phase == IDLE and not self._pending_move()
+                           and not self.start_lights.holding_race),
             })
         self.hud.draw(surface, players, self.dice, self._status_text(), self._can_roll())
 
@@ -246,6 +255,8 @@ class RaceScreen:
             return "ROLANDO..."
         if self.phase == MOVING:
             return "ACELERANDO!"
+        if self.start_lights.holding_race:
+            return "PREPARAR..."
         if self.state.status == "WAITING":
             return "AGUARDANDO"
         if self.state.status == "FINISHED":
@@ -257,6 +268,9 @@ class RaceScreen:
     def _draw_overlay(self, surface: pygame.Surface) -> None:
         if self.session_lost:
             self._draw_banner(surface, "DESCONECTADO", config.COLOR_RED, self.session_lost)
+        elif self.start_lights.showing_go:
+            draw_text(surface, self.font_go, "GO!", (20, 20, 20), center=(config.BASE_WIDTH // 2 + 4, 184))
+            draw_text(surface, self.font_go, "GO!", config.COLOR_GO, center=(config.BASE_WIDTH // 2, 180))
         elif self.state.status == "WAITING":
             self._draw_banner(surface, "AGUARDANDO ADVERSÁRIO", config.COLOR_TEXT,
                               f"Servidor {self.client.address}")

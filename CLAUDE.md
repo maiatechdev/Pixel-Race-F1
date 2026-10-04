@@ -533,7 +533,7 @@ assets/
 
 Não puderam ser tratados automaticamente e só existem em `assets_originais/`: `barriers/fence.png` (malha fina demais), `track/finish_line.png` e `track/curb_red_white.png` (quadrados brancos iguais ao xadrez e desenho em diagonal). Hoje a zebra e a linha de chegada são desenhadas por código.
 
-O fundo da corrida é montado em camadas de parallax (`BACKGROUND_LAYERS` e `TRACKSIDE_PROPS` em `client/config.py`): céu, montanhas, árvores, arquibancada e, à frente, postes e torre. O pórtico de largada fica fixo na linha de largada.
+O fundo da corrida é montado em camadas de parallax (`BACKGROUND_LAYERS` e `TRACKSIDE_PROPS` em `client/config.py`): céu, montanhas, árvores, arquibancada e, à frente, postes e torre. O pórtico de largada fica fixo na linha de largada. As posições das 5 luzes no sprite estão em `GANTRY_LIGHT_CENTERS`; a versão "apagada" é gerada em tempo de execução escurecendo essas áreas.
 
 As posições das rodas em cada carro e o deslocamento do sprite `accelerate` ficam em `CAR_SPRITES` no `client/config.py`. Se os carros forem regerados em outro tamanho, essas posições precisam ser medidas de novo.
 
