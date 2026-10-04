@@ -10,6 +10,7 @@ from components.dice import Dice
 from components.finish_celebration import FinishCelebration
 from components.hud import BUTTON_HIDDEN, BUTTON_READY, BUTTON_WAITING, Hud, draw_alert, draw_text
 from components.parallax import ParallaxLayer, PropLayer
+from components.particles import CarEffects, ParticleSystem
 from components.start_lights import StartLights
 from game_state import PLAYER_1, PLAYER_2, GameState
 from network import RacingClient
@@ -79,6 +80,8 @@ class RaceScreen:
         self.font = pixel_font(config.FONT_TEXT)
         self.font_small = pixel_font(config.FONT_SMALL)
         self.celebration = FinishCelebration()
+        self.particles = ParticleSystem()
+        self.car_effects = {pid: CarEffects() for pid in self.cars}
 
     @staticmethod
     def _build_backdrop() -> list:
@@ -145,8 +148,10 @@ class RaceScreen:
             self.cars[self.moving_player].move_to(self._server_position(self.moving_player))
             self.phase = MOVING
 
-        for car in self.cars.values():
+        for pid, car in self.cars.items():
             car.update(dt)
+            self.car_effects[pid].update(dt, car, self.particles)
+        self.particles.update(dt)
 
         if self.phase == MOVING and not self.cars[self.moving_player].is_moving:
             self.shown_positions[self.moving_player] = self._server_position(self.moving_player)
@@ -226,8 +231,10 @@ class RaceScreen:
         self.asphalt.draw(surface)
         self._draw_track_markings(surface)
         self._draw_start_gantry(surface)
+        self.particles.draw_smoke(surface)
         self.cars[PLAYER_1].draw(surface)
         self.cars[PLAYER_2].draw(surface)
+        self.particles.draw_sparks(surface)
         self._draw_you_marker(surface)
         self.celebration.draw(surface)
         self._draw_hud(surface)
