@@ -6,6 +6,7 @@ import config
 from assets import load_image, scale_to_height
 from components.car import Car, load_wheel_frames, screen_x_for
 from components.dice import Dice
+from components.finish_celebration import FinishCelebration
 from components.hud import Hud, draw_text
 from components.parallax import ParallaxLayer, PropLayer
 from components.start_lights import StartLights
@@ -60,6 +61,7 @@ class RaceScreen:
         self.dice = Dice(state.last_dice or None)
         self.font_title = pygame.font.Font(None, 64)
         self.font_go = pygame.font.Font(None, 140)
+        self.celebration = FinishCelebration()
         self.font = pygame.font.Font(None, 28)
 
     @staticmethod
@@ -114,6 +116,7 @@ class RaceScreen:
         self._handle_network_events()
         self.dice.update(dt)
         self.start_lights.update(dt)
+        self.celebration.update(dt)
 
         if self.phase == IDLE and not self.start_lights.holding_race:
             self._start_next_move()
@@ -128,6 +131,10 @@ class RaceScreen:
             self.shown_positions[self.moving_player] = self._server_position(self.moving_player)
             self.moving_player = 0
             self.phase = IDLE
+
+        if self._winner_crossed_line() and not self.celebration.started:
+            finish_x = round(screen_x_for(config.TRACK_LENGTH))
+            self.celebration.start(finish_x + config.FLAG_POLE_OFFSET_X, config.TRACK_TOP + 4)
 
         scroll = config.SCROLL_SPEED if self.phase == MOVING else 0.0
         for layer in self.backdrop:
@@ -165,6 +172,13 @@ class RaceScreen:
         for pid, player in state.players.items():
             self.names[pid] = player.name
 
+    def _race_settled(self) -> bool:
+        return self.state.status == "FINISHED" and self.phase == IDLE and not self._pending_move()
+
+    def _winner_crossed_line(self) -> bool:
+        return (self._race_settled()
+                and self._server_position(self.state.winner) >= self.state.track_length)
+
     def _cancel_roll(self) -> None:
         if self.roll_pending:
             self.roll_pending = False
@@ -192,6 +206,7 @@ class RaceScreen:
         self._draw_start_gantry(surface)
         self.cars[PLAYER_1].draw(surface)
         self.cars[PLAYER_2].draw(surface)
+        self.celebration.draw(surface)
         self._draw_hud(surface)
         self._draw_overlay(surface)
 
@@ -274,7 +289,7 @@ class RaceScreen:
         elif self.state.status == "WAITING":
             self._draw_banner(surface, "AGUARDANDO ADVERSÁRIO", config.COLOR_TEXT,
                               f"Servidor {self.client.address}")
-        elif self.state.status == "FINISHED" and self.phase == IDLE and not self._pending_move():
+        elif self._race_settled() and (self.celebration.done or not self._winner_crossed_line()):
             winner = self.state.winner
             title = "VOCÊ VENCEU!" if winner == self.my_id else f"{self.names.get(winner, '')} VENCEU"
             subtitle = ""
