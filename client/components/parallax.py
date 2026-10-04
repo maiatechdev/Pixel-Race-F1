@@ -8,8 +8,8 @@ class ParallaxLayer:
         self.speed_factor = speed_factor
         self.offset = 0.0
 
-    def update(self, dt: float, scroll_speed: float) -> None:
-        self.offset = (self.offset + scroll_speed * self.speed_factor * dt) % self.image.get_width()
+    def scroll_to(self, camera_x: float) -> None:
+        self.offset = (camera_x * self.speed_factor) % self.image.get_width()
 
     def draw(self, surface: pygame.Surface) -> None:
         width = self.image.get_width()
@@ -28,8 +28,8 @@ class PropLayer:
         self.speed_factor = speed_factor
         self.offset = 0.0
 
-    def update(self, dt: float, scroll_speed: float) -> None:
-        self.offset = (self.offset + scroll_speed * self.speed_factor * dt) % self.period
+    def scroll_to(self, camera_x: float) -> None:
+        self.offset = (camera_x * self.speed_factor) % self.period
 
     def draw(self, surface: pygame.Surface) -> None:
         for image, x in self.props:

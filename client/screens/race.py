@@ -5,7 +5,8 @@ import pygame
 
 import config
 from assets import load_image, pixel_font, scale_to_height, truncate
-from components.car import Car, load_wheel_frames, screen_x_for
+from components.camera import Camera, world_x
+from components.car import Car, load_wheel_frames
 from components.dice import Dice
 from components.finish_celebration import FinishCelebration
 from components.hud import BUTTON_HIDDEN, BUTTON_READY, BUTTON_WAITING, Hud, draw_alert, draw_text
@@ -24,6 +25,9 @@ MARKER_HEIGHT = 6
 MARKER_GAP = 6
 OUTLINE = (20, 20, 32)
 ALERT_TOP = 16
+INDICATOR_MARGIN = 8
+INDICATOR_PADDING = 6
+INDICATOR_ARROW = 12
 RULE_TEXT = f"PRIMEIRO A CHEGAR A {config.TRACK_LENGTH} VENCE"
 BANNER_TITLE_Y = 140
 BANNER_LINE_Y = 196
@@ -81,6 +85,8 @@ class RaceScreen:
         self.font_small = pixel_font(config.FONT_SMALL)
         self.celebration = FinishCelebration()
         self.particles = ParticleSystem()
+        self.camera = Camera()
+        self._follow_cars()
         self.car_effects = {pid: CarEffects() for pid in self.cars}
 
     @staticmethod
@@ -148,9 +154,11 @@ class RaceScreen:
             self.cars[self.moving_player].move_to(self._server_position(self.moving_player))
             self.phase = MOVING
 
-        for pid, car in self.cars.items():
+        for car in self.cars.values():
             car.update(dt)
-            self.car_effects[pid].update(dt, car, self.particles)
+        self._follow_cars()
+        for pid, car in self.cars.items():
+            self.car_effects[pid].update(dt, car, self.particles, self.camera)
         self.particles.update(dt)
 
         if self.phase == MOVING and not self.cars[self.moving_player].is_moving:
@@ -159,14 +167,18 @@ class RaceScreen:
             self.phase = IDLE
 
         if self._winner_crossed_line() and not self.celebration.started:
-            finish_x = round(screen_x_for(config.TRACK_LENGTH))
+            finish_x = round(self.camera.to_screen(world_x(config.TRACK_LENGTH)))
             self.celebration.start(finish_x + config.FLAG_POLE_OFFSET_X, config.TRACK_TOP + 4)
 
-        scroll = config.SCROLL_SPEED if self.phase == MOVING else 0.0
-        for layer in self.backdrop:
-            layer.update(dt, scroll)
-        self.asphalt.update(dt, scroll)
         return None
+
+    def _follow_cars(self) -> None:
+        previous_x = self.camera.x
+        self.camera.follow([car.visual_position for car in self.cars.values()])
+        self.particles.shift(previous_x - self.camera.x)
+        for layer in self.backdrop:
+            layer.scroll_to(self.camera.x)
+        self.asphalt.scroll_to(self.camera.x)
 
     def _handle_network_events(self) -> None:
         while True:
@@ -232,16 +244,17 @@ class RaceScreen:
         self._draw_track_markings(surface)
         self._draw_start_gantry(surface)
         self.particles.draw_smoke(surface)
-        self.cars[PLAYER_1].draw(surface)
-        self.cars[PLAYER_2].draw(surface)
+        self.cars[PLAYER_1].draw(surface, self.camera)
+        self.cars[PLAYER_2].draw(surface, self.camera)
         self.particles.draw_sparks(surface)
         self._draw_you_marker(surface)
+        self._draw_offscreen_indicators(surface)
         self.celebration.draw(surface)
         self._draw_hud(surface)
         self._draw_overlay(surface)
 
     def _draw_track_markings(self, surface: pygame.Surface) -> None:
-        offset = int(self.asphalt.offset)
+        offset = int(self.camera.x)
         for y in (config.TRACK_TOP, config.TRACK_BOTTOM - CURB_HEIGHT):
             for i, x in enumerate(range(-offset % (CURB_SEGMENT * 2) - CURB_SEGMENT * 2,
                                         config.BASE_WIDTH, CURB_SEGMENT)):
@@ -254,9 +267,9 @@ class RaceScreen:
 
         track_inner_top = config.TRACK_TOP + CURB_HEIGHT
         track_inner_h = config.TRACK_BOTTOM - CURB_HEIGHT - track_inner_top
-        start_x = round(screen_x_for(0))
+        start_x = round(self.camera.to_screen(0))
         pygame.draw.rect(surface, config.COLOR_LANE_LINE, (start_x, track_inner_top, 3, track_inner_h))
-        finish_x = round(screen_x_for(config.TRACK_LENGTH))
+        finish_x = round(self.camera.to_screen(world_x(config.TRACK_LENGTH)))
         for row in range(track_inner_h // CHECKER + 1):
             for col in range(2):
                 color = (20, 20, 20) if (row + col) % 2 else (240, 240, 240)
@@ -264,13 +277,15 @@ class RaceScreen:
                                                   track_inner_top + row * CHECKER, CHECKER, CHECKER))
 
     def _draw_start_gantry(self, surface: pygame.Surface) -> None:
-        start_x = round(screen_x_for(0))
+        start_x = round(self.camera.to_screen(0))
         rect = self.start_lights.lit_image.get_rect(left=start_x - config.GANTRY_POST_OFFSET_X,
                                                     bottom=config.TRACK_TOP + config.GANTRY_OVERHANG)
         self.start_lights.draw(surface, rect.topleft)
 
     def _draw_you_marker(self, surface: pygame.Surface) -> None:
-        body = self.cars[self.my_id].body_rect()
+        body = self.cars[self.my_id].body_rect(self.camera)
+        if body.right <= 0:
+            return
         bob = round(math.sin(self.clock * 4))
         tip = (body.centerx, body.top - MARKER_GAP + bob)
         triangle = [tip, (tip[0] - MARKER_HALF_WIDTH, tip[1] - MARKER_HEIGHT),
@@ -280,6 +295,27 @@ class RaceScreen:
         label_x, label_y = tip[0], tip[1] - MARKER_HEIGHT - 3
         draw_text(surface, self.font_small, "VOCÊ", OUTLINE, midbottom=(label_x + 1, label_y + 1))
         draw_text(surface, self.font_small, "VOCÊ", config.COLOR_YELLOW, midbottom=(label_x, label_y))
+
+    def _draw_offscreen_indicators(self, surface: pygame.Surface) -> None:
+        for pid, car in self.cars.items():
+            if car.body_rect(self.camera).right > 0:
+                continue
+            name = "VOCÊ" if pid == self.my_id else truncate(self.names.get(pid, ""), 8)
+            position = min(self.shown_positions[pid], config.TRACK_LENGTH)
+            text = f"{name} {position}/{config.TRACK_LENGTH}"
+            label = self.font_small.render(text, False, config.COLOR_TEXT)
+            plate = pygame.Rect(0, 0, label.get_width() + 2 * INDICATOR_PADDING + INDICATOR_ARROW,
+                                label.get_height() + 2 * INDICATOR_PADDING)
+            plate.midleft = (INDICATOR_MARGIN, car.lane_y - car.idle.get_height() // 2)
+            pygame.draw.rect(surface, config.COLOR_HUD_BG, plate)
+            pygame.draw.rect(surface, PLAYER_COLORS[pid], plate, 2)
+            arrow_x = plate.left + INDICATOR_PADDING
+            pygame.draw.polygon(surface, PLAYER_COLORS[pid], [
+                (arrow_x, plate.centery),
+                (arrow_x + INDICATOR_ARROW - 4, plate.centery - 4),
+                (arrow_x + INDICATOR_ARROW - 4, plate.centery + 4),
+            ])
+            surface.blit(label, label.get_rect(midleft=(arrow_x + INDICATOR_ARROW, plate.centery)))
 
     def _draw_hud(self, surface: pygame.Surface) -> None:
         players = []

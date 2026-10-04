@@ -4,11 +4,7 @@ import pygame
 
 import config
 from assets import load_image
-
-
-def screen_x_for(position: float) -> float:
-    progress = min(position, config.TRACK_LENGTH) / config.TRACK_LENGTH
-    return config.START_X + progress * (config.FINISH_X - config.START_X)
+from components.camera import Camera, world_x
 
 
 def load_wheel_frames() -> list[pygame.Surface]:
@@ -56,13 +52,14 @@ class Car:
         self.wheel_angle = (self.wheel_angle
                             + self.wheel_spin * config.WHEEL_MAX_DEGREES_PER_SECOND * dt) % 360
 
-    def body_rect(self) -> pygame.Rect:
-        return self.idle.get_rect(right=round(screen_x_for(self.visual_position)), bottom=self.lane_y)
+    def body_rect(self, camera: Camera) -> pygame.Rect:
+        nose_x = round(camera.to_screen(world_x(self.visual_position)))
+        return self.idle.get_rect(right=nose_x, bottom=self.lane_y)
 
-    def draw(self, surface: pygame.Surface) -> None:
+    def draw(self, surface: pygame.Surface, camera: Camera) -> None:
         moving = self.is_moving
         shake = round(math.sin(self.anim_time * 60)) if moving else 0
-        body = self.body_rect().move(0, shake)
+        body = self.body_rect(camera).move(0, shake)
         if moving:
             surface.blit(self.accelerating, body.move(self.accelerate_offset_x, 0))
         else:

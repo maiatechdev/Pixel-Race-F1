@@ -4,6 +4,7 @@ from dataclasses import dataclass
 import pygame
 
 import config
+from components.camera import Camera
 from components.car import Car
 
 SMOKE = "smoke"
@@ -65,6 +66,10 @@ class ParticleSystem:
                 color=random.choice(config.SPARK_COLORS),
             ))
 
+    def shift(self, dx: float) -> None:
+        for particle in self.particles:
+            particle.x += dx
+
     def _add(self, particle: Particle) -> None:
         if len(self.particles) < config.MAX_PARTICLES:
             self.particles.append(particle)
@@ -109,9 +114,9 @@ class CarEffects:
         self.was_moving = False
         self.smoke_timer = 0.0
 
-    def update(self, dt: float, car: Car, particles: ParticleSystem) -> None:
+    def update(self, dt: float, car: Car, particles: ParticleSystem, camera: Camera) -> None:
         moving = car.is_moving
-        body = car.body_rect()
+        body = car.body_rect(camera)
         (rear_x, wheel_y), (front_x, _) = car.wheel_centers
         ground_y = body.y + wheel_y + WHEEL_RADIUS - 2
         rear = (body.x + rear_x, ground_y)
