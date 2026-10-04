@@ -23,6 +23,13 @@ MARKER_HEIGHT = 6
 MARKER_GAP = 6
 OUTLINE = (20, 20, 32)
 ALERT_TOP = 16
+RULE_TEXT = f"PRIMEIRO A CHEGAR A {config.TRACK_LENGTH} VENCE"
+BANNER_TITLE_Y = 140
+BANNER_LINE_Y = 196
+BANNER_LINE_GAP = 28
+BANNER_EXIT_Y = 284
+TITLE_SHADOW_OFFSET = 3
+PLATE_PADDING = (14, 8)
 
 IDLE = "IDLE"
 ROLLING = "ROLLING"
@@ -272,7 +279,7 @@ class RaceScreen:
         for pid in (PLAYER_1, PLAYER_2):
             players.append({
                 "id": pid,
-                "name": self.names.get(pid, "AGUARDANDO"),
+                "name": self.names.get(pid, "---"),
                 "position": self.shown_positions[pid],
                 "color": PLAYER_COLORS[pid],
                 "is_me": pid == self.my_id,
@@ -291,7 +298,7 @@ class RaceScreen:
             draw_alert(surface, self.message, "", midtop=alert_top)
 
     def _button_state(self) -> str:
-        if self.session_lost or self.state.status == "FINISHED":
+        if self.session_lost or self.state.status in ("WAITING", "FINISHED"):
             return BUTTON_HIDDEN
         return BUTTON_READY if self._can_roll() else BUTTON_WAITING
 
@@ -317,28 +324,51 @@ class RaceScreen:
 
     def _draw_overlay(self, surface: pygame.Surface) -> None:
         if self.session_lost:
-            self._draw_banner(surface, "DESCONECTADO", config.COLOR_RED, self.session_lost)
+            self._draw_banner(surface, "DESCONECTADO", config.COLOR_ALERT, OUTLINE, [self.session_lost])
         elif self.start_lights.showing_go:
-            draw_text(surface, self.font_go, "GO!", (20, 20, 20), center=(config.BASE_WIDTH // 2 + 4, 184))
+            draw_text(surface, self.font_go, "GO!", OUTLINE, center=(config.BASE_WIDTH // 2 + 4, 184))
             draw_text(surface, self.font_go, "GO!", config.COLOR_GO, center=(config.BASE_WIDTH // 2, 180))
+        elif self.start_lights.holding_race:
+            self._draw_plate(surface, RULE_TEXT, ALERT_TOP)
         elif self.state.status == "WAITING":
-            self._draw_banner(surface, "AGUARDANDO ADVERSÁRIO", config.COLOR_TEXT,
-                              f"Servidor {self.client.address}")
+            self._draw_banner(surface, "AGUARDANDO ADVERSÁRIO", config.COLOR_TEXT, OUTLINE,
+                              [RULE_TEXT, f"Servidor {self.client.address}"])
         elif self._race_settled() and (self.celebration.done or not self._winner_crossed_line()):
             winner = self.state.winner
             winner_name = truncate(self.names.get(winner, ""), config.HUD_NAME_MAX_CHARS)
             title = "VOCÊ VENCEU!" if winner == self.my_id else f"{winner_name} VENCEU"
-            subtitle = ""
+            lines = [self._score_line()]
             if self._server_position(winner) < self.state.track_length:
-                subtitle = "O adversário saiu da corrida"
-            self._draw_banner(surface, title, PLAYER_COLORS.get(winner, config.COLOR_TEXT), subtitle)
+                lines.append("O adversário saiu da corrida")
+            self._draw_banner(surface, title, config.COLOR_YELLOW,
+                              PLAYER_COLORS.get(winner, OUTLINE), lines)
 
-    def _draw_banner(self, surface: pygame.Surface, title: str, color, subtitle: str) -> None:
+    def _score_line(self) -> str:
+        parts = []
+        for pid in (PLAYER_1, PLAYER_2):
+            name = truncate(self.names.get(pid, ""), 10)
+            position = min(self.shown_positions[pid], config.TRACK_LENGTH)
+            parts.append((name, position))
+        (name_1, position_1), (name_2, position_2) = parts
+        return f"{name_1} {position_1} x {position_2} {name_2}"
+
+    def _draw_plate(self, surface: pygame.Surface, text: str, top: int) -> None:
+        width, height = self.font.size(text)
+        plate = pygame.Rect(0, 0, width + 2 * PLATE_PADDING[0], height + 2 * PLATE_PADDING[1])
+        plate.midtop = (config.BASE_WIDTH // 2, top)
+        pygame.draw.rect(surface, config.COLOR_HUD_BG, plate)
+        pygame.draw.rect(surface, config.COLOR_BUTTON_IDLE, plate, 2)
+        draw_text(surface, self.font, text, config.COLOR_TEXT, center=plate.center)
+
+    def _draw_banner(self, surface: pygame.Surface, title: str, color, shadow, lines: list[str]) -> None:
         shade = pygame.Surface((config.BASE_WIDTH, config.HUD_TOP), pygame.SRCALPHA)
-        shade.fill((0, 0, 0, 160))
+        shade.fill((0, 0, 0, 170))
         surface.blit(shade, (0, 0))
         center_x = config.BASE_WIDTH // 2
-        draw_text(surface, self.font_title, title, color, center=(center_x, 160))
-        if subtitle:
-            draw_text(surface, self.font, subtitle, config.COLOR_TEXT, center=(center_x, 220))
-        draw_text(surface, self.font, "ESC: SAIR", config.COLOR_TEXT_DIM, center=(center_x, 270))
+        draw_text(surface, self.font_title, title, shadow,
+                  center=(center_x + TITLE_SHADOW_OFFSET, BANNER_TITLE_Y + TITLE_SHADOW_OFFSET))
+        draw_text(surface, self.font_title, title, color, center=(center_x, BANNER_TITLE_Y))
+        for index, line in enumerate(lines):
+            draw_text(surface, self.font, line, config.COLOR_TEXT,
+                      center=(center_x, BANNER_LINE_Y + index * BANNER_LINE_GAP))
+        draw_text(surface, self.font, "ESC: SAIR", config.COLOR_TEXT_DIM, center=(center_x, BANNER_EXIT_Y))

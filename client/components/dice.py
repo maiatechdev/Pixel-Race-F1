@@ -3,6 +3,7 @@ import random
 import pygame
 
 import config
+from assets import pixel_font
 
 SIZE = 44
 PIP = 6
@@ -64,6 +65,8 @@ class Dice:
         pygame.draw.rect(surface, (20, 20, 20), rect.inflate(4, 4))
         pygame.draw.rect(surface, (245, 245, 245), rect)
         if self.value is None:
+            mark = pixel_font(config.FONT_TEXT).render("?", False, (20, 20, 20))
+            surface.blit(mark, mark.get_rect(center=rect.center))
             return
         cell = SIZE // 3
         for gx, gy in PIPS[self.value]:
