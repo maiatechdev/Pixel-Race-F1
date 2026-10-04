@@ -20,8 +20,14 @@ LANE_BLUE_Y = 425
 START_X = 140
 FINISH_X = 900
 
-CAR_WIDTH = 140
-HELMET_SIZE = 34
+WHEEL_FRAME_COUNT = 8
+WHEEL_SPIN_UP_SECONDS = 0.4
+WHEEL_MAX_DEGREES_PER_SECOND = 900
+
+CAR_SPRITES = {
+    "red": {"wheel_centers": ((21, 26), (120, 26)), "accelerate_offset_x": -4},
+    "blue": {"wheel_centers": ((21, 26), (120, 26)), "accelerate_offset_x": -2},
+}
 
 SCROLL_SPEED = 260
 PARALLAX_BACKDROP = 0.15

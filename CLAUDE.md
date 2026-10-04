@@ -484,44 +484,46 @@ Isso cria profundidade sem exigir cenário 3D.
 
 # 16. Assets
 
-Estrutura atual (arquivos existentes):
+As imagens geradas originalmente vieram sem transparência real: o "xadrez" de fundo estava desenhado nos pixels e elas eram grandes (≈2172x724). Por isso existem duas pastas:
+
+- `assets_originais/`: imagens originais com xadrez, mantidas como fonte. **Não carregar no jogo.**
+- `assets/`: versões tratadas, com transparência real e já no tamanho usado na tela (resolução base 960x540). O jogo carrega só daqui.
+
+`tratar_assets.py` gera `assets/` a partir de `assets_originais/` (remove o xadrez, recorta e reduz). Para mudar o tamanho de um asset, altere o script e rode de novo; não edite os PNGs tratados à mão.
 
 ```text
 assets/
 |
 |-- cars/
-|   |-- red/                  # Player 1
+|   |-- red/                  # Player 1, 153x39
 |   |   |-- idle.png
 |   |   `-- accelerate.png
 |   |
-|   `-- blue/                 # Player 2
+|   `-- blue/                 # Player 2, 151x44
 |       |-- idle.png
 |       `-- accelerate.png
 |
 |-- wheels/
-|   `-- wheel_sheet.png       # planilha de animação das rodas (compartilhada pelos dois carros)
+|   `-- frame_1..8.png        # 21x21; 1 = parada, 8 = borrão de velocidade máxima
 |
 |-- helmets/
 |   |-- red.png
 |   `-- blue.png
 |
 |-- background/
-|   |-- sky.png
-|   |-- mountains.png
+|   |-- sky.png               # opaco, original
+|   |-- city_panorama.png     # opaco, original; cena completa usada hoje no fundo
+|   |-- mountains.png         # 960 de largura
 |   |-- trees.png
-|   |-- grandstand.png
-|   `-- city_panorama.png     # cena completa já composta (alternativa às camadas)
+|   `-- grandstand.png
 |
 |-- track/
-|   |-- asphalt.png
-|   |-- curb_red_white.png
-|   |-- grass.png
-|   `-- finish_line.png
+|   |-- asphalt.png           # opaco, original
+|   `-- grass.png
 |
 |-- barriers/
 |   |-- tire_wall.png
-|   |-- concrete_wall.png
-|   `-- fence.png
+|   `-- concrete_wall.png
 |
 `-- circuit/
     |-- starting_lights.png   # pórtico de largada
@@ -529,9 +531,11 @@ assets/
     `-- control_tower.png
 ```
 
-Pastas previstas, ainda **sem arquivos**: `effects/` (smoke, sparks, exhaust), `ui/` (dice, icons, flags, hud), `fonts/`, `audio/`.
+Não puderam ser tratados automaticamente e só existem em `assets_originais/`: `barriers/fence.png` (malha fina demais), `track/finish_line.png` e `track/curb_red_white.png` (quadrados brancos iguais ao xadrez e desenho em diagonal). Hoje a zebra e a linha de chegada são desenhadas por código.
 
-**Atenção — os PNGs atuais não têm transparência real.** Todos estão em RGB, sem canal alfa, e o "xadrez" cinza e branco de fundo transparente está desenhado nos próprios pixels. Além disso, são imagens grandes (≈2172x724, carros 1983x793, elementos 1536x1024), não sprites em grade de pixel nativa. Antes de usar como camadas ou sprites, será preciso remover o fundo e reduzir para a escala de pixel art.
+As posições das rodas em cada carro e o deslocamento do sprite `accelerate` ficam em `CAR_SPRITES` no `client/config.py`. Se os carros forem regerados em outro tamanho, essas posições precisam ser medidas de novo.
+
+Pastas previstas, ainda **sem arquivos**: `effects/` (smoke, sparks, exhaust), `ui/` (dice, icons, flags, hud), `fonts/`, `audio/`.
 
 Antes de escrever código dependente de assets, **inspecione o diretório existente e use os nomes reais**.
 

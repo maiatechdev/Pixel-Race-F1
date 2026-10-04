@@ -3,8 +3,8 @@ import queue
 import pygame
 
 import config
-from assets import load_image, scale_to_height, scale_to_width
-from components.car import Car, screen_x_for
+from assets import load_image, scale_to_height
+from components.car import Car, load_wheel_frames, screen_x_for
 from components.dice import Dice
 from components.hud import Hud, draw_text
 from components.parallax import ParallaxLayer
@@ -36,13 +36,10 @@ class RaceScreen:
         self.connection_error = ""
         self.session_lost = ""
 
+        wheel_frames = load_wheel_frames()
         self.cars = {
-            PLAYER_1: Car(self._car_image("cars/red/idle.png"),
-                          self._car_image("cars/red/accelerate.png"),
-                          config.LANE_RED_Y, self.shown_positions[PLAYER_1]),
-            PLAYER_2: Car(self._car_image("cars/blue/idle.png"),
-                          self._car_image("cars/blue/accelerate.png"),
-                          config.LANE_BLUE_Y, self.shown_positions[PLAYER_2]),
+            PLAYER_1: Car("red", wheel_frames, config.LANE_RED_Y, self.shown_positions[PLAYER_1]),
+            PLAYER_2: Car("blue", wheel_frames, config.LANE_BLUE_Y, self.shown_positions[PLAYER_2]),
         }
 
         self.backdrop = ParallaxLayer(
@@ -54,17 +51,13 @@ class RaceScreen:
             y=config.TRACK_TOP, speed_factor=config.PARALLAX_TRACK)
 
         helmets = {
-            PLAYER_1: scale_to_height(load_image("helmets/red.png"), config.HELMET_SIZE),
-            PLAYER_2: scale_to_height(load_image("helmets/blue.png"), config.HELMET_SIZE),
+            PLAYER_1: load_image("helmets/red.png"),
+            PLAYER_2: load_image("helmets/blue.png"),
         }
         self.hud = Hud(helmets)
         self.dice = Dice(state.last_dice or None)
         self.font_title = pygame.font.Font(None, 64)
         self.font = pygame.font.Font(None, 28)
-
-    @staticmethod
-    def _car_image(path: str) -> pygame.Surface:
-        return scale_to_width(load_image(path), config.CAR_WIDTH)
 
     def _server_position(self, player_id: int) -> int:
         player = self.state.players.get(player_id)
