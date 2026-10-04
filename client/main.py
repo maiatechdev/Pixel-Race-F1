@@ -1,11 +1,24 @@
+import argparse
+
 import pygame
 
 import config
-from mock_game import MockGame
-from screens.race import RaceScreen
+from screens.connect import ConnectScreen
+
+DEFAULT_HOST = "localhost"
+DEFAULT_PORT = 50051
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Cliente do Distributed Racing")
+    parser.add_argument("--name", default="")
+    parser.add_argument("--host", default=DEFAULT_HOST)
+    parser.add_argument("--port", type=int, default=DEFAULT_PORT)
+    return parser.parse_args()
 
 
 def main() -> None:
+    args = parse_args()
     pygame.init()
     pygame.display.set_caption("Distributed Racing")
     window = pygame.display.set_mode(
@@ -13,7 +26,7 @@ def main() -> None:
     canvas = pygame.Surface((config.BASE_WIDTH, config.BASE_HEIGHT))
     clock = pygame.time.Clock()
 
-    screen = RaceScreen(MockGame())
+    screen = ConnectScreen(args.name, args.host, args.port)
 
     running = True
     while running:
@@ -29,12 +42,15 @@ def main() -> None:
                     event.pos = (event.pos[0] // config.WINDOW_SCALE, event.pos[1] // config.WINDOW_SCALE)
                 screen.handle_event(event)
 
-        screen.update(dt)
+        next_screen = screen.update(dt)
+        if next_screen:
+            screen = next_screen
 
         screen.draw(canvas)
         pygame.transform.scale(canvas, window.get_size(), window)
         pygame.display.flip()
 
+    screen.close()
     pygame.quit()
 
 

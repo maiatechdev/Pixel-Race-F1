@@ -24,14 +24,21 @@ class Dice:
         self._elapsed = 0.0
         self._face_timer = 0.0
         self._result: int | None = None
+        self._value_before_roll = value
 
     def start_roll(self) -> None:
+        self._value_before_roll = self.value
         self.rolling = True
         self._elapsed = 0.0
         self._result = None
 
     def set_result(self, value: int) -> None:
         self._result = value
+
+    def cancel(self) -> None:
+        self.rolling = False
+        self._result = None
+        self.value = self._value_before_roll
 
     @property
     def done(self) -> bool:
