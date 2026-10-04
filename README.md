@@ -1,4 +1,4 @@
-# Distributed Racing
+# F1 PIXEL RACE
 
 Jogo de corrida em pixel art para 2 jogadores, feito para a disciplina de Sistemas Distribuídos.
 

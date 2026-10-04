@@ -10,7 +10,7 @@ DEFAULT_PORT = 50051
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Cliente do Distributed Racing")
+    parser = argparse.ArgumentParser(description="Cliente do F1 PIXEL RACE")
     parser.add_argument("--name", default="")
     parser.add_argument("--host", default=DEFAULT_HOST)
     parser.add_argument("--port", type=int, default=DEFAULT_PORT)
@@ -20,7 +20,7 @@ def parse_args() -> argparse.Namespace:
 def main() -> None:
     args = parse_args()
     pygame.init()
-    pygame.display.set_caption("Distributed Racing")
+    pygame.display.set_caption("F1 PIXEL RACE")
     window = pygame.display.set_mode(
         (config.BASE_WIDTH * config.WINDOW_SCALE, config.BASE_HEIGHT * config.WINDOW_SCALE))
     canvas = pygame.Surface((config.BASE_WIDTH, config.BASE_HEIGHT))

@@ -143,7 +143,7 @@ class ConnectScreen:
                        midbottom=(center_x, PANEL_TOP + PANEL_HEIGHT - 14))
 
     def _draw_title(self, surface: pygame.Surface, center_x: int) -> None:
-        title = "DISTRIBUTED RACING"
+        title = "F1 PIXEL RACE"
         for dx, dy in ((-2, 0), (2, 0), (0, -2), (0, 2), (4, 4)):
             draw_text(surface, self.font_title, title, TITLE_OUTLINE, center=(center_x + dx, TITLE_Y + dy))
         draw_text(surface, self.font_title, title, config.COLOR_TEXT, center=(center_x, TITLE_Y))
