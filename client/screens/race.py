@@ -7,7 +7,7 @@ from assets import load_image, scale_to_height
 from components.car import Car, load_wheel_frames, screen_x_for
 from components.dice import Dice
 from components.hud import Hud, draw_text
-from components.parallax import ParallaxLayer
+from components.parallax import ParallaxLayer, PropLayer
 from game_state import PLAYER_1, PLAYER_2, GameState
 from network import RacingClient
 
@@ -42,9 +42,8 @@ class RaceScreen:
             PLAYER_2: Car("blue", wheel_frames, config.LANE_BLUE_Y, self.shown_positions[PLAYER_2]),
         }
 
-        self.backdrop = ParallaxLayer(
-            scale_to_height(load_image("background/city_panorama.png"), config.BACKDROP_HEIGHT),
-            y=0, speed_factor=config.PARALLAX_BACKDROP)
+        self.backdrop = self._build_backdrop()
+        self.start_gantry = load_image("circuit/starting_lights.png")
         track_height = config.TRACK_BOTTOM - config.TRACK_TOP
         self.asphalt = ParallaxLayer(
             scale_to_height(load_image("track/asphalt.png"), track_height),
@@ -58,6 +57,19 @@ class RaceScreen:
         self.dice = Dice(state.last_dice or None)
         self.font_title = pygame.font.Font(None, 64)
         self.font = pygame.font.Font(None, 28)
+
+    @staticmethod
+    def _build_backdrop() -> list:
+        sky = scale_to_height(load_image("background/sky.png"), config.SKY_HEIGHT)
+        layers = [ParallaxLayer(sky, y=config.BACKDROP_HEIGHT - config.SKY_HEIGHT,
+                                speed_factor=config.PARALLAX_SKY)]
+        for path, bottom_y, speed_factor in config.BACKGROUND_LAYERS:
+            image = load_image(path)
+            layers.append(ParallaxLayer(image, y=bottom_y - image.get_height(), speed_factor=speed_factor))
+        props = [(load_image(path), x) for path, x in config.TRACKSIDE_PROPS]
+        layers.append(PropLayer(props, config.TRACKSIDE_BOTTOM, config.TRACKSIDE_PERIOD,
+                                config.PARALLAX_TRACKSIDE))
+        return layers
 
     def _server_position(self, player_id: int) -> int:
         player = self.state.players.get(player_id)
@@ -112,7 +124,8 @@ class RaceScreen:
             self.phase = IDLE
 
         scroll = config.SCROLL_SPEED if self.phase == MOVING else 0.0
-        self.backdrop.update(dt, scroll)
+        for layer in self.backdrop:
+            layer.update(dt, scroll)
         self.asphalt.update(dt, scroll)
         return None
 
@@ -164,9 +177,11 @@ class RaceScreen:
         self.client.close()
 
     def draw(self, surface: pygame.Surface) -> None:
-        self.backdrop.draw(surface)
+        for layer in self.backdrop:
+            layer.draw(surface)
         self.asphalt.draw(surface)
         self._draw_track_markings(surface)
+        self._draw_start_gantry(surface)
         self.cars[PLAYER_1].draw(surface)
         self.cars[PLAYER_2].draw(surface)
         self._draw_hud(surface)
@@ -194,6 +209,12 @@ class RaceScreen:
                 color = (20, 20, 20) if (row + col) % 2 else (240, 240, 240)
                 pygame.draw.rect(surface, color, (finish_x + col * CHECKER,
                                                   track_inner_top + row * CHECKER, CHECKER, CHECKER))
+
+    def _draw_start_gantry(self, surface: pygame.Surface) -> None:
+        start_x = round(screen_x_for(0))
+        surface.blit(self.start_gantry,
+                     self.start_gantry.get_rect(left=start_x - config.GANTRY_POST_OFFSET_X,
+                                                bottom=config.TRACK_TOP + config.GANTRY_OVERHANG))
 
     def _draw_hud(self, surface: pygame.Surface) -> None:
         players = []

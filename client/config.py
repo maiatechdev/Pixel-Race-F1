@@ -30,8 +30,28 @@ CAR_SPRITES = {
 }
 
 SCROLL_SPEED = 260
-PARALLAX_BACKDROP = 0.15
 PARALLAX_TRACK = 1.0
+
+SKY_HEIGHT = 320
+PARALLAX_SKY = 0.02
+BACKGROUND_LAYERS = (
+    ("background/mountains.png", 200, 0.06),
+    ("background/trees.png", 245, 0.15),
+    ("background/grandstand.png", 300, 0.3),
+)
+
+TRACKSIDE_BOTTOM = 300
+TRACKSIDE_PERIOD = 1440
+PARALLAX_TRACKSIDE = 0.6
+TRACKSIDE_PROPS = (
+    ("circuit/lamp_post.png", 60),
+    ("circuit/control_tower.png", 520),
+    ("circuit/lamp_post.png", 820),
+    ("circuit/lamp_post.png", 1180),
+)
+
+GANTRY_POST_OFFSET_X = 14
+GANTRY_OVERHANG = 6
 
 DICE_ROLL_DURATION = 0.7
 DICE_FACE_INTERVAL = 0.07
