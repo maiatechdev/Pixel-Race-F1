@@ -1106,7 +1106,7 @@ Preferir:
 - type hints quando úteis;
 - constantes para configuração;
 - evitar números mágicos;
-- comentários explicando **por quê**, não repetindo o código.
+- não adicionar comentários nem docstrings no código; nomes claros devem bastar.
 
 Evitar abstrações prematuras.
 
